@@ -11,9 +11,10 @@ Agentes-Skills-work/
 ├── comun/                    ← sirve en TODOS los proyectos (se instala a nivel de usuario)
 │   ├── skills/               frontend-architecture, backend-architecture, database-postgres,
 │   │                         security-auth, testing-vitest
+│   │                         (guías de andamiaje en references/: frontend-guide.md, api-guide.md)
 │   ├── agents/               security-auditor, test-writer
 │   ├── generado/             (automático: versiones OpenCode y Antigravity, no editar)
-│   └── rulesproyect.md       estándares de la empresa (copia maestra)
+│   └── rulesproyect.md       estándares de la empresa (copia maestra; Parte II = referencia de BD)
 │
 ├── proyectos/
 │   └── barnard-sgsi/         ← solo de este proyecto (se vincula a su carpeta)

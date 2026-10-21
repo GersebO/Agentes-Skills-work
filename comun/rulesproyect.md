@@ -23,8 +23,9 @@ Before starting development, identify the project scope to ensure compliance wit
 
 ### 🔹 Frontend Layer (React/Next.js)
 Focused on **User Experience (UX)** and **Performance**.
-* **Pattern:** `Component → Hook (Orchestrator) → Service → Zustand (State)`.
-* **Key Principle:** The UI should be "dumb" (presentational), while the Hook handles the "brain" (logic and orchestration).
+* **Pattern:** `Page → Component → Hook → Zustand Store → Service → API`.
+* **Key Principle:** The UI should be "dumb" (presentational). The **Zustand store** is the "brain": its async actions call the service and own the result, loading and error state. The **Hook** is the component's only door to the store.
+* **Strict rule:** no layer skips another. Components never import a store or a service directly; services never hold state.
 
 ### 🔸 Backend Layer (Node.js/Express)
 Focused on **Security** and **Separation of Concerns**.
@@ -43,9 +44,9 @@ Focused on **Security** and **Separation of Concerns**.
     * **`layout/`**: Structural skeletons (Headers, Sidebars).
     * **`ui/`**: Atomic, robust components based on CVA (Buttons, Inputs).
 * **`store/`**:
-    * **`hooks/`**: **(The Orchestrator)** Where business logic and loading states live.
-    * **`services/`**: Pure API fetching logic (Axios/Fetch).
-    * **`zustand/`**: Global state "Source of Truth."
+    * **`hooks/`**: **(The Door)** Wraps the store with selective subscriptions and is the only thing components import. Never calls a service.
+    * **`zustand/`**: **(The Brain / Source of Truth)** Async actions call the service and store the result plus `isLoading` / `hasError` / `errorMessage`, always releasing state in `finally`.
+    * **`services/`**: Pure API fetching logic (Axios). No state, no business logic.
     * **`interfaces/`**: Strict TypeScript data contracts.
 
 ### ⚙️ Backend Logic (The Layered System)
@@ -92,7 +93,7 @@ We implement a **Dual-Token Architecture** with mandatory rotation:
 * **Loading UX:**
     * **Skeletons:** Mandatory for initial data fetching to maintain visual structure.
     * **Spinners:** Reserved for AI processing or "Save" actions.
-* **Responsive "Mirror" Strategy:** Hide complex tables (`hidden md:block`) and render an optimized card list (`block md:hidden`) for mobile devices.
+* **Responsive "Mirror" Strategy:** Complex tables switch to an optimized card list on mobile. Prefer the table component's own mobile renderer (e.g. `DataTable` `renderMobileCard`) so search, filters and pagination are shared; never re-implement them by hand for mobile.
 
 ---
 
@@ -166,7 +167,7 @@ Enterprise data integrity is non-negotiable. The database and core logic must be
 * **Standard Table Contract:** Every domain table has `id uuid` (`gen_random_uuid()`), `created_at`, `updated_at` (`NULL` on creation) and `deleted_at`, all `timestamptz`. Natural keys are enforced with unique indexes, which also drive `ON CONFLICT` upserts (Part II §2, §7.4).
 * **Standard Response Envelope:** Every stored function returns `jsonb` with `status` (`success` / `not_found` / `error`), `data`, and optionally `count` or `message`. Lists are never `null` (`[]`). The only documented exception are the auth utility functions (Part II §13.4). Database error messages (`SQLERRM`) are logged with Pino and never returned to the HTTP client.
 * **Data Integrity in JSONB:** When using `jsonb` columns for dynamic storage, every incoming payload must be rigorously structured and validated using defined schemas (Joi for Barnard-SGSI / Zod for others) before insertion into the database to prevent structural injections.
-* **Least-Privilege DB Access:** All functions are `SECURITY DEFINER`. The application's database user has `EXECUTE` permission on `app` functions only, with no direct `SELECT/INSERT/UPDATE/DELETE` on tables.
+* **Least-Privilege DB Access:** All functions are `SECURITY DEFINER` with a fixed `SET search_path = app, pg_temp`. The application's database user has `EXECUTE` permission on `app` functions only, with no direct `SELECT/INSERT/UPDATE/DELETE` on tables.
 * **Nil UUID Convention for "No aplica" (Barnard-SGSI):** To differentiate between the unconfigured/empty state (`NULL` in the `uuid` column, displayed as "Sin cargo supervisor") and the explicit "No aplica" state (cargos that report to no one by design, e.g., CEO) without modifying the database schema or the Joi backend validation, we use the Nil UUID (`00000000-0000-0000-0000-000000000000`) as a reserved value. An empty string `""` is never stored (a `uuid` column cannot hold it); if the frontend sends `""`, the backend converts it to `NULL` before calling the model. Because the Nil UUID is not a real row, columns that may hold it must **not** have a FK constraint to the referenced table (or must be validated in `services/` instead). All position visualizations (Org Chart, Position Profile, Staff Assignment) must parse this UUID as "No aplica" instead of querying a real database entity.
 
 **Standard strictly for Production Environments.**
@@ -362,7 +363,7 @@ CREATE UNIQUE INDEX role_a_idx ON app.role_a USING btree (organization_id);
 ## 5. Stored Functions — Convenciones
 
 - **Lenguaje:** `plpgsql` (con `DECLARE`/`BEGIN`/`EXCEPTION`) para mutaciones; puede usarse `SQL STABLE` solo para funciones de lectura pura sin lógica condicional.
-- **Security:** todas las funciones se declaran `SECURITY DEFINER`, ejecutándose con los permisos del owner.
+- **Security:** todas las funciones se declaran `SECURITY DEFINER`, ejecutándose con los permisos del owner, y **siempre** fijan `SET search_path = app, pg_temp`. Sin esto, quien llama podría crear en otro schema una tabla u operador con el mismo nombre y hacer que la función, con permisos de owner, lo use en lugar del original.
 - **Retorno:** siempre `RETURNS jsonb`. Nunca `SETOF` ni `TABLE`.
 - **Parámetros:** con prefijo `p_` (`p_id`, `p_period`). Variables locales con prefijo `v_` (`v_id`, `v_result`).
 - **Manejo de errores:** bloque `EXCEPTION WHEN OTHERS THEN` en todas las funciones mutables. Las funciones de lectura también lo incluyen por consistencia.
@@ -384,6 +385,7 @@ CREATE OR REPLACE FUNCTION app.entity_action(p_id uuid)
 RETURNS jsonb
 LANGUAGE plpgsql
 STABLE SECURITY DEFINER   -- STABLE solo para lecturas puras
+SET search_path = app, pg_temp
 AS $function$
 DECLARE
     v_result JSONB;
@@ -466,6 +468,7 @@ CREATE OR REPLACE FUNCTION app.entity_get_all()
 RETURNS jsonb
 LANGUAGE plpgsql
 STABLE SECURITY DEFINER
+SET search_path = app, pg_temp
 AS $function$
 DECLARE
     v_data  JSONB;
@@ -503,6 +506,7 @@ CREATE OR REPLACE FUNCTION app.entity_get_by_id(p_id uuid)
 RETURNS jsonb
 LANGUAGE plpgsql
 STABLE SECURITY DEFINER
+SET search_path = app, pg_temp
 AS $function$
 DECLARE
     v_result JSONB;
@@ -553,6 +557,7 @@ CREATE OR REPLACE FUNCTION app.entity_get_by_fields(
 RETURNS jsonb
 LANGUAGE plpgsql
 STABLE SECURITY DEFINER
+SET search_path = app, pg_temp
 AS $function$
 DECLARE
     v_data  JSONB;
@@ -620,6 +625,7 @@ CREATE OR REPLACE FUNCTION app.entity_upsert(p_name varchar, p_id uuid DEFAULT N
 RETURNS jsonb
 LANGUAGE plpgsql
 SECURITY DEFINER
+SET search_path = app, pg_temp
 AS $function$
 DECLARE v_id UUID;
 BEGIN
@@ -689,6 +695,7 @@ CREATE OR REPLACE FUNCTION app.entity_delete_by_id(p_id uuid)
 RETURNS jsonb
 LANGUAGE plpgsql
 SECURITY DEFINER
+SET search_path = app, pg_temp
 AS $function$
 DECLARE v_affected INTEGER;
 BEGIN
@@ -724,6 +731,7 @@ CREATE OR REPLACE FUNCTION app.build_entity_row(p_id uuid)
 RETURNS jsonb
 LANGUAGE plpgsql
 STABLE SECURITY DEFINER
+SET search_path = app, pg_temp
 AS $function$
 DECLARE v_result JSONB;
 BEGIN
@@ -982,7 +990,7 @@ RETURNS JSON AS $$
         FROM app.users
         WHERE LOWER(TRIM(email)) = LOWER(TRIM(p_email)) AND deleted_at IS NULL
     ) u;
-$$ LANGUAGE SQL STABLE SECURITY DEFINER;
+$$ LANGUAGE SQL STABLE SECURITY DEFINER SET search_path = app, pg_temp;
 
 -- Búsqueda de usuario por id (verificación de token / /auth/me)
 CREATE OR REPLACE FUNCTION app.user_get_by_id(p_id UUID)
@@ -993,7 +1001,7 @@ RETURNS JSON AS $$
         FROM app.users
         WHERE id = p_id AND deleted_at IS NULL
     ) u;
-$$ LANGUAGE SQL STABLE SECURITY DEFINER;
+$$ LANGUAGE SQL STABLE SECURITY DEFINER SET search_path = app, pg_temp;
 
 -- Insertar un nuevo refresh token (login / refresh)
 CREATE OR REPLACE FUNCTION app.user_refresh_token_insert(
@@ -1003,7 +1011,7 @@ CREATE OR REPLACE FUNCTION app.user_refresh_token_insert(
 ) RETURNS VOID AS $$
     INSERT INTO app.refresh_tokens(user_id, token_hash, expires_at)
     VALUES (p_user_id, p_token_hash, p_expires_at);
-$$ LANGUAGE SQL SECURITY DEFINER;
+$$ LANGUAGE SQL SECURITY DEFINER SET search_path = app, pg_temp;
 
 -- Listar refresh tokens activos de un usuario (validación de rotación)
 CREATE OR REPLACE FUNCTION app.user_refresh_tokens_get_active(p_user_id UUID)
@@ -1016,7 +1024,7 @@ RETURNS JSON AS $$
           AND revoked_at IS NULL
           AND expires_at > NOW()
     ) t;
-$$ LANGUAGE SQL STABLE SECURITY DEFINER;
+$$ LANGUAGE SQL STABLE SECURITY DEFINER SET search_path = app, pg_temp;
 
 -- Buscar un refresh token por su hash, INCLUIDOS los revocados (detección de robo)
 CREATE OR REPLACE FUNCTION app.user_refresh_token_get_by_hash(p_token_hash VARCHAR)
@@ -1027,20 +1035,20 @@ RETURNS JSON AS $$
         FROM app.refresh_tokens
         WHERE token_hash = p_token_hash
     ) t;
-$$ LANGUAGE SQL STABLE SECURITY DEFINER;
+$$ LANGUAGE SQL STABLE SECURITY DEFINER SET search_path = app, pg_temp;
 
 -- Revocar un refresh token específico (rotación)
 CREATE OR REPLACE FUNCTION app.user_refresh_token_revoke(p_token_id UUID)
 RETURNS VOID AS $$
     UPDATE app.refresh_tokens SET revoked_at = NOW() WHERE id = p_token_id;
-$$ LANGUAGE SQL SECURITY DEFINER;
+$$ LANGUAGE SQL SECURITY DEFINER SET search_path = app, pg_temp;
 
 -- Revocar todos los refresh tokens de un usuario (logout de todas las sesiones)
 CREATE OR REPLACE FUNCTION app.user_refresh_tokens_revoke_all(p_user_id UUID)
 RETURNS VOID AS $$
     UPDATE app.refresh_tokens SET revoked_at = NOW()
     WHERE user_id = p_user_id AND revoked_at IS NULL;
-$$ LANGUAGE SQL SECURITY DEFINER;
+$$ LANGUAGE SQL SECURITY DEFINER SET search_path = app, pg_temp;
 
 -- Agregar un access token a la blacklist (logout)
 CREATE OR REPLACE FUNCTION app.token_blacklist_insert(
@@ -1051,7 +1059,7 @@ CREATE OR REPLACE FUNCTION app.token_blacklist_insert(
     INSERT INTO app.token_blacklist(jti, user_id, expires_at)
     VALUES (p_jti, p_user_id, p_expires_at)
     ON CONFLICT (jti) DO NOTHING;
-$$ LANGUAGE SQL SECURITY DEFINER;
+$$ LANGUAGE SQL SECURITY DEFINER SET search_path = app, pg_temp;
 ```
 
 **Por qué estas funciones usan `LANGUAGE SQL` y no `plpgsql`:** son operaciones simples de una sola sentencia, sin lógica condicional ni manejo de excepciones. Cuando una función de auth necesita lógica adicional (validaciones, transformación de datos), debe escribirse en `plpgsql` siguiendo el patrón estándar de la sección 5, incluyendo el bloque `EXCEPTION WHEN OTHERS`.
