@@ -42,13 +42,26 @@ Render validation error messages in containers with reserved space and a minimum
 
 Every async mutation block must use a `finally` clause to turn spinners off and re-enable the interface, so a network failure or server rejection can never leave the UI permanently locked.
 
+This lives in the Zustand store action (the component never calls the service):
+
 ```ts
-try {
-  setSubmitting(true);
-  await service.submit(payload);
-} catch (e) {
-  handleError(e);
-} finally {
-  setSubmitting(false); // always runs
+entityUpsert: async (payload) => {
+  set({ isLoading: true, hasError: false, errorMessage: '' })
+  try {
+    const { data: response } = await entityService.upsert(payload)
+    if (!response.success) throw new Error(response.error ?? 'Unknown error')
+    const saved = response.data!
+    set((s) => ({
+      entityList: payload.id
+        ? s.entityList.map((e) => (e.id === saved.id ? saved : e))
+        : [...s.entityList, saved],
+    }))
+    return true
+  } catch (err: unknown) {
+    set({ hasError: true, errorMessage: err instanceof Error ? err.message : 'Error' })
+    return false
+  } finally {
+    set({ isLoading: false }) // always runs
+  }
 }
 ```

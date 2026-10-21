@@ -48,7 +48,7 @@ When using `jsonb` columns for dynamic storage, validate every incoming payload 
 
 ## 5. Zero hidden logic in the database
 
-Native database functions (PL/pgSQL) and triggers are limited to integrity validations, audit logs, and large aggregation calculations. Complex business rules and orchestration must always live in the Node.js services layer, never hidden inside the database.
+Native database functions (PL/pgSQL) and triggers are limited to data access and serialization, integrity validations, **data** orchestration (resolving external identifiers, writing a header and its details in one transaction), audit logs, and large aggregation calculations. Business rules (state machines, normative calculations, permissions, dependency checks before a delete) must always live in the Node.js services layer, never hidden inside the database. Rule of thumb from `rulesproyect.md` Part II §1: if the decision depends on the business meaning of the data, it goes in `services/`; if it depends only on its shape or integrity, it goes in the database function.
 
 ## Review checklist
 
@@ -57,3 +57,7 @@ Native database functions (PL/pgSQL) and triggers are limited to integrity valid
 - State transitions validated in services; entities start in their base state.
 - JSONB payloads validated by schema before insert.
 - No business logic buried in triggers or PL/pgSQL.
+
+## Full reference
+
+The complete PostgreSQL convention (table contract, function patterns `get_all` / `get_by_id` / `get_by_fields` / `upsert` / `delete_by_id`, JSONB envelope, auth tables and functions, step-by-step new entity) lives in `rulesproyect.md` **Part II**. Copy SQL from there, never from older guides. Every `SECURITY DEFINER` function must also set `SET search_path = app, pg_temp`.

@@ -22,7 +22,8 @@ Each layer has one job:
 - **controllers/** (the receptionist) extract data from `req.body` / `req.params`, run basic validation, and delegate to the service. Controllers must NOT contain business logic.
 - **services/** (the chef) hold all business logic, calculations, and complex orchestration. This is the only place the "magic" happens.
 - **models/** (the connector) own the actual database connection via the Pool.
-- **queries/** (the spell dictionary) store raw parameterized SQL, keeping SQL out of the rest of the code.
+- **queries/** (the spell dictionary) store only parameterized calls to stored functions (`SELECT app.entity_get_by_id($1) AS data`). No direct `SELECT/INSERT/UPDATE` on tables, no string concatenation.
+- **models/** read the `{ status, data }` envelope through a shared `unwrap()` helper: `success` → data, `not_found` → `null`, `error` → logged with Pino and thrown as a generic error (never expose `SQLERRM`).
 - **schemas/** (the manual) hold validation schemas.
 - **config/** centralizes configuration through `requireEnv()`.
 - **app.ts** (the heart) holds global security settings.
@@ -71,10 +72,14 @@ Validate in the controller (or a validation middleware) before delegating to the
 ## Build workflow
 
 1. Define the validation schema in `schemas/` (Joi for Barnard-SGSI, Zod otherwise).
-2. Add the raw parameterized SQL in `queries/` (see the database-postgres skill).
+2. Add the stored-function call in `queries/` (the SQL itself lives in a migration; see the database-postgres skill).
 3. Implement the business logic in `services/`.
 4. Wire a thin controller that validates, delegates, and shapes the HTTP response.
 5. Map the route in `routers/` and attach the needed middlewares.
+
+## Reference file
+
+To **scaffold a new backend service** or add a complete entity end to end (project setup, config, logger, error handler, auth with refresh rotation, routers with explicit verbs, `sendResponse`, Docker, Vitest), read `references/api-guide.md`. When it differs from `rulesproyect.md`, the standard wins.
 
 ## Related skills
 

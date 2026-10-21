@@ -39,12 +39,21 @@ Choose the loading indicator by context:
 
 ## Responsive "Mirror" strategy
 
-Do not try to cram complex tables onto small screens. Render two synchronized views and toggle by breakpoint:
+Do not try to cram complex tables onto small screens. Show an optimized card list on mobile with the same data.
+
+Prefer the table component's own mobile renderer, so search, filters and pagination are shared between both views:
 
 ```tsx
-// Desktop: full table
-<table className="hidden md:block"> ... </table>
+<DataTable
+  columns={columns}
+  data={rows}
+  renderMobileCard={(row) => <EntityCard row={row} />}
+/>
+```
 
-// Mobile: optimized card list with the same data
-<div className="block md:hidden"> ...cards... </div>
+Only if the table component has no mobile renderer, toggle two views by breakpoint, wrapping the table (never put `hidden md:block` on the `<table>` itself, it breaks table layout):
+
+```tsx
+<div className="hidden md:block"><Table>...</Table></div>
+<div className="md:hidden">...cards...</div>
 ```
