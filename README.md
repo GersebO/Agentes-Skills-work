@@ -1,98 +1,76 @@
-# Agentes y herramientas para Barnard-SGSI
+# Agentes y Skills de trabajo
 
-Este repositorio reúne instrucciones, skills, agentes y scripts para ayudar a desarrollar, revisar y validar cambios en Barnard-SGSI. Su objetivo es aplicar de forma consistente los estándares de arquitectura, seguridad, frontend, backend, base de datos y documentación.
-
-> Este repositorio contiene herramientas y estándares de trabajo; no contiene la aplicación Barnard-SGSI. Varias validaciones esperan ejecutarse sobre el workspace del proyecto, con rutas como `app-sgsi/`, `api-sgsi/` y `docs/`.
-
-## Qué incluye
-
-### Estándares del proyecto
-
-[`rulesproyect.md`](rulesproyect.md) es la referencia general para:
-
-- Arquitectura frontend: Component → Hook → Service → Zustand.
-- Arquitectura backend: Router → Middleware → Controller → Service → Model → Query → Database.
-- Autenticación con JWT, controles de seguridad HTTP y protección de datos.
-- Diseño de interfaz, accesibilidad y experiencia de carga.
-- Convenciones de nombres, pruebas y validación.
-- PostgreSQL, funciones almacenadas, integridad de datos y soft deletes.
-
-[`AGENTS.md`](AGENTS.md) indica cómo aplicar estas reglas y dónde consultar los estándares de UI y arquitectura del proyecto.
-
-### Skills
-
-Las skills contienen guías de trabajo detalladas que los asistentes pueden seguir según la tarea:
-
-- **Arquitectura:** frontend, backend y PostgreSQL.
-- **Seguridad y autenticación:** JWT, configuración de seguridad y lógica PL/pgSQL.
-- **Calidad y validación:** parametrización SQL, tamaño de componentes, convenciones de nombres, middlewares, motores de validación, bloqueo de formularios, soft deletes y transiciones de estado.
-- **Pruebas y documentación:** pruebas con Vitest, trazabilidad documental y análisis de decisiones arquitectónicas.
-- **Interfaz:** estándares y auditoría de pantallas de E-SGSI.
-
-Las definiciones para Claude Code están en [`.claude/skills/`](.claude/skills/). También hay skills reutilizables en [`agents/skills/`](agents/skills/).
-
-### Agentes y workflows
-
-- [`.claude/agents/`](.claude/agents/) contiene agentes de revisión para arquitectura, backend, documentación y UI.
-- [`agents/`](agents/) incluye agentes especializados de seguridad y pruebas.
-- [`.agents/workflows/`](.agents/workflows/) ofrece workflows para ejecutar el guardian de arquitectura, revisar backend, auditar UI y mantener documentación.
-
-Los agentes de revisión están diseñados para analizar y reportar hallazgos; consulta sus instrucciones antes de usarlos para conocer su alcance y permisos.
-
-### Scripts
-
-Los scripts de [`scripts/`](scripts/) automatizan comprobaciones y tareas de apoyo. Entre otras cosas:
-
-- Detectan SQL no parametrizado y revisan soft deletes.
-- Comprueban convenciones de nombres y el tamaño de componentes funcionales.
-- Revisan la configuración JWT, el orden de middlewares y el bloqueo de formularios durante operaciones asíncronas.
-- Validan motores de esquemas y transiciones de estado.
-- Detectan lógica de negocio en funciones PL/pgSQL.
-- Ayudan a revisar ADRs, localizar imports de servicios, auditar estándares y dividir archivos SQL grandes.
-
-El detalle de cada script está en [`scripts/README.md`](scripts/README.md).
-
-## Uso
-
-### Ejecutar una validación
-
-Desde la raíz del workspace del proyecto:
-
-```bash
-node scripts/validate-sql-params.js
-node scripts/validate-component-size.js
-node scripts/validate-middleware-order.js
-```
-
-Cada script se puede ejecutar de forma independiente. Revisa [`scripts/README.md`](scripts/README.md) para conocer qué rutas inspecciona y cómo interpretar el resultado. En PowerShell también se puede ejecutar el conjunto de validadores y detectores:
-
-```powershell
-Get-ChildItem scripts/validate-*.js, scripts/detect-*.js | ForEach-Object {
-  node $_.FullName
-}
-```
-
-### Trabajar con skills y agentes
-
-Usa la skill o el workflow relacionado con la tarea (por ejemplo, frontend, backend, seguridad, pruebas o documentación) y sigue las instrucciones y estándares incluidos en sus respectivos archivos. No asumas que un agente que audita también tiene permiso para modificar código.
-
-## Requisitos
-
-- Node.js para ejecutar los scripts.
-- Un workspace de Barnard-SGSI para las validaciones que inspeccionan `app-sgsi/`, `api-sgsi/` o `docs/`.
-- Un asistente compatible con los archivos de skills, agentes o workflows para utilizarlos como instrucciones.
+Fuente única de skills, agentes y prompts para Claude Code, OpenCode y Antigravity.
+Nada se copia a los proyectos: se **vinculan** (junctions de Windows), así que lo que cambies aquí
+se ve al instante en todos lados.
 
 ## Estructura
 
-```text
-.
-├── .agents/workflows/   # Workflows reutilizables
-├── .claude/agents/      # Agentes de Claude Code
-├── .claude/skills/      # Skills de Claude Code
-├── agents/              # Agentes y skills compartidos
-├── scripts/             # Validadores y utilidades Node.js
-├── AGENTS.md            # Instrucciones para agentes
-├── README.md            # Descripción y uso de este repositorio
-└── rulesproyect.md      # Estándares técnicos del proyecto
+```
+Agentes-Skills-work/
+├── comun/                    ← sirve en TODOS los proyectos (se instala a nivel de usuario)
+│   ├── skills/               frontend-architecture, backend-architecture, database-postgres,
+│   │                         security-auth, testing-vitest
+│   ├── agents/               security-auditor, test-writer
+│   ├── generado/             (automático: versiones OpenCode y Antigravity, no editar)
+│   └── rulesproyect.md       estándares de la empresa (copia maestra)
+│
+├── proyectos/
+│   └── barnard-sgsi/         ← solo de este proyecto (se vincula a su carpeta)
+│       ├── skills/           ui-esgsi, validate-*, update-documentation, analyze-architectural-decisions...
+│       ├── agents/           ui-auditor, architecture-guardian, backend-reviewer, docs-keeper
+│       ├── generado/         (automático, no editar)
+│       └── referencia/       copias de respaldo: scripts/, AGENTS.md (viven en el repo del proyecto)
+│
+├── plantillas/               bloque de CLAUDE.md para planes delegados + prompts frecuentes
+└── herramientas/
+    ├── instalar-global.bat   vincula comun/ a tu usuario (una vez por PC)
+    ├── instalar-proyecto.bat vincula proyectos/<nombre>/ a un proyecto
+    └── sync-agents.py        genera las versiones de OpenCode y Antigravity
+```
+
+## Instalación (una vez por PC)
+
+Desde CMD, en la raíz de este repo:
 
 ```
+herramientas\instalar-global.bat
+herramientas\instalar-proyecto.bat barnard-sgsi "C:\ruta\a\barnard-sgsi"
+```
+
+Lo que ya exista se renombra a `.bak-NNNN` (no se borra). Revisa y borra esos `.bak` cuando todo funcione.
+
+En el `.gitignore` del proyecto agrega:
+
+```
+.claude/skills
+.claude/agents
+.opencode/agent
+.agents/
+```
+
+## Reglas
+
+1. **Se edita solo aquí**, en `skills/` y `agents/`. Nunca en `generado/`.
+2. Después de crear o cambiar un agente: `python herramientas/sync-agents.py`.
+3. ¿Dónde va una skill nueva? Si sirve en cualquier proyecto → `comun/`. Si menciona rutas,
+   pantallas o scripts de un proyecto → `proyectos/<nombre>/`.
+
+## Proyecto nuevo
+
+```
+herramientas\instalar-proyecto.bat <nombre> "C:\ruta\al\proyecto"
+```
+
+Si `proyectos/<nombre>/` no existe, se crea vacío. Luego:
+1. Pega `plantillas/CLAUDE-planes-delegados.md` en el CLAUDE.md del proyecto.
+2. Usa el prompt 4 de `plantillas/prompts.md` para generar su estándar de UI.
+3. Crea sus skills y agentes en `proyectos/<nombre>/`.
+
+## Dónde queda cada cosa
+
+| Herramienta | Común (usuario) | Proyecto |
+|---|---|---|
+| Claude Code | `~/.claude/skills`, `~/.claude/agents` | `.claude/skills`, `.claude/agents` |
+| OpenCode | `~/.config/opencode/agent` | `.opencode/agent` |
+| Antigravity | `~/.gemini/config/skills` | `.agents/skills`, `.agents/workflows` (`/nombre`) |
